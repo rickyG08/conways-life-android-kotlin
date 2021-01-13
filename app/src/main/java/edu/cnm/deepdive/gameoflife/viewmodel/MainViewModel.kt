@@ -13,138 +13,122 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package edu.cnm.deepdive.gameoflife.viewmodel;
+package edu.cnm.deepdive.gameoflife.viewmodel
 
-import android.app.Application;
-import androidx.annotation.NonNull;
-import androidx.lifecycle.AndroidViewModel;
-import androidx.lifecycle.Lifecycle.Event;
-import androidx.lifecycle.LifecycleObserver;
-import androidx.lifecycle.LiveData;
-import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.OnLifecycleEvent;
-import edu.cnm.deepdive.gameoflife.model.Terrain;
-import java.util.Random;
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.MutableLiveData
+import edu.cnm.deepdive.gameoflife.model.Terrain
+import androidx.lifecycle.LiveData
+import edu.cnm.deepdive.gameoflife.viewmodel.MainViewModel
+import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.Lifecycle
+import java.util.*
 
-public class MainViewModel extends AndroidViewModel implements LifecycleObserver {
+class MainViewModel(application: Application) : AndroidViewModel(application), LifecycleObserver {
 
-  private static final int DEFAULT_TERRAIN_SIZE = 500;
-  private static final int DEFAULT_DENSITY = 20;
+    private val terrain: MutableLiveData<Terrain?>
+    private val generation: MutableLiveData<Long>
+    private val population: MutableLiveData<Int>
 
-  private final MutableLiveData<Terrain> terrain;
-  private final MutableLiveData<Long> generation;
-  private final MutableLiveData<Integer> population;
-  private final MutableLiveData<Boolean> running;
-  private final MutableLiveData<Integer> density;
-  private final Random rng;
+    private val _running: MutableLiveData<Boolean>
+    val running: LiveData<Boolean>
+        get() = _running
 
-  private Runner runner;
+    val density: MutableLiveData<Int>
+    private val rng: Random
+    private var runner: Runner? = null
 
-  public MainViewModel(@NonNull Application application) {
-    super(application);
-    terrain = new MutableLiveData<>(null);
-    generation = new MutableLiveData<>(0L);
-    population = new MutableLiveData<>(0);
-    running = new MutableLiveData<>(false);
-    density = new MutableLiveData<>(DEFAULT_DENSITY);
-    rng = new Random();
-    reset();
-  }
-
-  public LiveData<Terrain> getTerrain() {
-    return terrain;
-  }
-
-  public LiveData<Long> getGeneration() {
-    return generation;
-  }
-
-  public LiveData<Integer> getPopulation() {
-    return population;
-  }
-
-  public LiveData<Boolean> getRunning() {
-    return running;
-  }
-
-  public MutableLiveData<Integer> getDensity() {
-    return density;
-  }
-
-  public void start() {
-    stopRunner(false);
-    running.setValue(true);
-    startRunner();
-  }
-
-  public void stop() {
-    stopRunner(true);
-    running.setValue(false);
-  }
-
-  public void reset() {
-    stop();
-    //noinspection ConstantConditions
-    Terrain terrain = new Terrain(DEFAULT_TERRAIN_SIZE, density.getValue() / 100d, rng);
-    this.terrain.setValue(terrain);
-    generation.setValue(terrain.getIterationCount());
-  }
-
-  @OnLifecycleEvent(Event.ON_PAUSE)
-  private void pause() {
-    //noinspection ConstantConditions
-    stopRunner(!running.getValue());
-  }
-
-  @OnLifecycleEvent(Event.ON_RESUME)
-  private void resume() {
-    //noinspection ConstantConditions
-    if (running.getValue()) {
-      startRunner();
+    init {
+        terrain = MutableLiveData(null)
+        generation = MutableLiveData(0L)
+        population = MutableLiveData(0)
+        _running = MutableLiveData(false)
+        density = MutableLiveData(DEFAULT_DENSITY)
+        rng = Random()
+        reset()
     }
-  }
 
-  private void startRunner() {
-    runner = new Runner();
-    runner.start();
-  }
-
-  private void stopRunner(boolean postOnStop) {
-    if (runner != null) {
-      runner.setPostOnStop(postOnStop);
-      runner.setRunning(false);
-      runner = null;
+    fun getTerrain(): LiveData<Terrain?> {
+        return terrain
     }
-  }
 
-  private class Runner extends Thread {
+    fun getGeneration(): LiveData<Long> {
+        return generation
+    }
 
-    private boolean running = true;
-    private boolean postOnStop;
+    fun getPopulation(): LiveData<Int> {
+        return population
+    }
 
-    @Override
-    public void run() {
-      while (running) {
-        Terrain terrain = MainViewModel.this.terrain.getValue();
-        if (terrain != null) {
-          terrain.iterate();
-          generation.postValue(terrain.getIterationCount());
-          population.postValue(terrain.getPopulation());
+    fun start() {
+        stopRunner(false)
+        _running.value = true
+        startRunner()
+    }
+
+    fun stop() {
+        stopRunner(true)
+        _running.value = false
+    }
+
+    fun reset() {
+        stop()
+        val terrain = Terrain(DEFAULT_TERRAIN_SIZE, density.value!! / 100.0, rng)
+        this.terrain.value = terrain
+        generation.value = terrain.iterationCount
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    private fun pause() {
+        stopRunner(!running.value!!)
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    private fun resume() {
+        if (running.value!!) {
+            startRunner()
         }
-      }
-      if (postOnStop) {
-        MainViewModel.this.running.postValue(false);
-      }
     }
 
-    public void setRunning(boolean running) {
-      this.running = running;
+    private fun startRunner() {
+        runner = Runner().also {
+            it.start()
+        }
     }
 
-    public void setPostOnStop(boolean postOnStop) {
-      this.postOnStop = postOnStop;
+    private fun stopRunner(postOnStop: Boolean) {
+        runner?.let {
+            it.postOnStop = postOnStop
+            it.running = false
+        }
+        runner = null
     }
 
-  }
+    private inner class Runner : Thread() {
+
+        var running = true
+        var postOnStop = false
+
+        override fun run() {
+            while (running) {
+                val terrain = terrain.value?.also {
+                    it.iterate()
+                    generation.postValue(it.iterationCount)
+                    population.postValue(it.population)
+                }
+            }
+            if (postOnStop) {
+                this@MainViewModel._running.postValue(false)
+            }
+        }
+
+    }
+
+    companion object {
+        private const val DEFAULT_TERRAIN_SIZE = 500
+        private const val DEFAULT_DENSITY = 20
+    }
 
 }
