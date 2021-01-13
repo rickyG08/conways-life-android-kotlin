@@ -27,15 +27,14 @@ import edu.cnm.deepdive.gameoflife.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
-    private var viewModel: MainViewModel? = null
+    private lateinit var viewModel: MainViewModel
     private var running = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val binding: ActivityMainBinding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         binding.lifecycleOwner = this
-        ViewModelProvider(this).get(MainViewModel::class.java).also {
-            viewModel = it
+        viewModel = ViewModelProvider(this).get(MainViewModel::class.java).also {
             lifecycle.addObserver(it)
             it.running.observe(this, { running: Boolean ->
                 if (running != this.running) {
@@ -64,7 +63,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         var handled = true
-        viewModel?.also {
+        viewModel.let {
             when (item.itemId) {
                 R.id.run -> it.start()
                 R.id.pause -> it.stop()
